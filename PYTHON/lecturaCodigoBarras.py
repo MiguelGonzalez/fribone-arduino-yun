@@ -8,6 +8,19 @@ sys.path.insert(0, '/usr/lib/python2.7/bridge/')
 
 from bridgeclient import BridgeClient as bridgeclient
 
+# Variables
+infile_path = "/dev/input/event1"
+
+#long int, long int, unsigned short, unsigned short, unsigned int
+FORMAT = 'llHHI'
+EVENT_SIZE = struct.calcsize(FORMAT)
+
+teclasPulsadas = dict()
+escribiendoLetras = False
+codigoBarras = ''
+bridgeCliente = bridgeclient()
+in_file = None
+
 # Funciones
 
 def esTeclaNumerica(value):
@@ -30,26 +43,8 @@ def esTeclaControl(value):
     return value == 458792 or \
             value == 458976 or \
             value == 458765
-
-# Inicio programa
-
-infile_path = "/dev/input/event1"
-
-#long int, long int, unsigned short, unsigned short, unsigned int
-FORMAT = 'llHHI'
-EVENT_SIZE = struct.calcsize(FORMAT)
-
-#open file in binary mode
-in_file = open(infile_path, "rb")
-
-event = in_file.read(EVENT_SIZE)
-
-teclasPulsadas = dict()
-escribiendoLetras = False
-codigoBarras = ''
-bridgeCliente = bridgeclient()
-
-while event:
+def procesarEvento(event):
+    global teclasPulsadas, escribiendoLetras, codigoBarras, bridgeCliente
     (tv_sec, tv_usec, type, code, value) = struct.unpack(FORMAT, event)
 
     # Importa este orden de la condición, si se altera puede imprimir
@@ -59,8 +54,7 @@ while event:
     else:
         if esTeclaControl(value) and escribiendoLetras:
             escribiendoLetras = False
-            # print codigoBarras
-
+            #print codigoBarras
             bridgeCliente.put('codebar', codigoBarras)
 
             codigoBarras = ''
@@ -74,5 +68,25 @@ while event:
                 codigoBarras += getTeclaLetra(value)
         del teclasPulsadas[value]
 
-    event = in_file.read(EVENT_SIZE)
-in_file.close()
+def conectarUsb():
+    global in_file
+    in_file = None
+    conectado = False
+    while not conectado:
+        try:
+            # Intentamos abrir el fichero
+            in_file = open(infile_path, "rb")
+            conectado = True
+        except IOError:
+            time.sleep(1) # Pausamos 1seg
+
+# Inicio programa
+conectarUsb()
+event = in_file.read(EVENT_SIZE)
+while event:
+    try:
+        procesarEvento(event)
+        event = in_file.read(EVENT_SIZE)
+    except IOError:
+        conectarUsb()
+        event = in_file.read(EVENT_SIZE)
