@@ -36,12 +36,17 @@ const String urlRest = "http://www.fribone.miguelgonzalezgomez.es/rest/";
 const String vincularLectorRest = "activar/";
 const String entrarProductoRest = "entrar/";
 const String sacarProductoRest = "sacar/";
+const String listarFrigorificosRest = "next_fridge/";
+const String desvincularRest = "desvincular/";
+
+//Variables de vinculación
+String token = "";
+String idFrigorifico = "-1";
+String tituloFrigorifico = "";
 
 // Otras variables
-char arrayTag[10];
+char arrayTag[11];
 char arrayCodigoBarras[13];
-String token = "";
-String idFrigorifico = "";
 char stateApplication;
 unsigned long timerCheckBarCode;
 
@@ -51,6 +56,8 @@ char codigoBarrasUno[13];
 char codigoBarrasDos[13];
 
 void setup() {
+  RFID.begin(9600);
+
   TFTscreen.begin();
 
   TFTscreen.background(255, 255, 255);
@@ -70,9 +77,8 @@ void setup() {
   Bridge.begin();
   FileSystem.begin();
   // Let SO run scripts
-  delay(1000);
+  delay(10000);
 
-  RFID.begin(9600);
   timerCheckBarCode = millis();
 
   if(FileSystem.exists("/mnt/sda1/data/token.txt")) {
@@ -82,6 +88,16 @@ void setup() {
       token += charLeido;
     }
     dataFile.close();
+
+    if(FileSystem.exists("/mnt/sda1/data/fridge.txt")) {
+        idFrigorifico = "";
+        File dataFile2 = FileSystem.open("/mnt/sda1/data/fridge.txt", FILE_READ);
+        while((charLeido = dataFile2.read()) != -1) {
+          idFrigorifico += charLeido;
+        }
+        dataFile2.close();
+    }
+
     stateApplication = '1';
   } else {
     leidoPrimerCodigoBarras = false;
@@ -91,15 +107,8 @@ void setup() {
 
 void loop() {
   if(stateApplication == '1') {
-    logger("Inicializando sketch");
-    logger("Token leido:");
-    logger(token);
-
     printHome();
   } else if(stateApplication == '0') {
-    logger("Inicializando sketch");
-    logger("Token inexistente");
-
     printVincular();
   }
 
@@ -123,8 +132,8 @@ void loop() {
         }
         codigoBarrasUno[12] = '\0';
 
-        logger("Leído código de barras uno:");
-        loggerArray(codigoBarrasUno);
+          TFTscreen.rect(5, 70, 150, 25);
+          TFTscreen.text("Leido primer codigo", 10, 80);
       } else {
         int i;
         for(i = 0; i<12; i++) {
@@ -132,17 +141,11 @@ void loop() {
         }
         codigoBarrasDos[12] = '\0';
 
-        logger("Leído código de barras dos:");
-        loggerArray(codigoBarrasDos);
-
         iniciarVinculacion();
       }
-    }
-    TFTscreen.text(arrayCodigoBarras, 28, 40);
-    if(stateApplication == 'E') {
+    } else if(stateApplication == 'E') {
       entrarProducto(true);
-    }
-    if(stateApplication == 'S') {
+    } else if(stateApplication == 'S') {
       sacarProducto(true);
     }
   }
@@ -152,7 +155,7 @@ boolean procesarEventosBotones() {
   buttonUpState = digitalRead(buttonUp);
   if(buttonUpState == HIGH) {
     if(stateApplication == 'H') {
-      printSeleccionarFrigo();
+      printSiguienteFrigorifico();
     }
 
     return true;
@@ -174,6 +177,8 @@ boolean procesarEventosBotones() {
       FileSystem.remove("/mnt/sda1/data/token.txt");
 
       printVincular();
+    } else if(stateApplication == 'S') {
+      printSiguienteFrigorifico();
     }
 
     return true;
@@ -183,6 +188,9 @@ boolean procesarEventosBotones() {
   if(buttonLeftState == HIGH) {
     if(stateApplication == 'H') {
       printEntrarProducto();
+    } else if(stateApplication == 'S') {
+        guardarFrigorifico();
+        printHome();
     } else if(stateApplication != 'H') {
       printHome();
     }
@@ -198,8 +206,10 @@ boolean procesarEventosBotones() {
 
 void iniciarVinculacion() {
   String requestUrl = urlRest + vincularLectorRest + codigoBarrasUno + "/" + codigoBarrasDos;
-  logger("Iniciando vinculación");
-  logger("URL: " + requestUrl);
+
+  TFTscreen.rect(5, 70, 150, 25);
+  TFTscreen.text("Vinculando lector", 10, 80);
+
   client.get(requestUrl);
 
   String response = "";
@@ -208,7 +218,6 @@ void iniciarVinculacion() {
     charIn = client.read();
     response += charIn;
   }
-  logger("Respuesta recibida: " + response);
 
   if(response == "" || response == "ERROR") {
     printErrorVincular();
@@ -226,13 +235,13 @@ void iniciarVinculacion() {
   }
 }
 
-void entrarProducto(boolean esCodigoBarras) {
-  String requestUrl = urlRest + entrarProductoRest + token + "/" + idFrigorifico + "/";
-  if(esCodigoBarras) {
-    requestUrl += arrayCodigoBarras;
-  } else {
-    requestUrl += arrayTag;
-  }
+String seleccionSiguienteFrigorifico() {
+  String requestUrl = urlRest + listarFrigorificosRest + token + '/' + idFrigorifico;
+
+  TFTscreen.rect(5, 70, 150, 25);
+  TFTscreen.text("Cargando frigo...", 10, 80);
+
+  client.get(requestUrl);
 
   String response = "";
   char charIn;
@@ -242,19 +251,76 @@ void entrarProducto(boolean esCodigoBarras) {
   }
 
   if(response == "" || response == "ERROR") {
-
+    return "";
   } else {
+    idFrigorifico = "";
+    tituloFrigorifico = "";
+    int i;
+    boolean escrito_numero = false;
+    for(i=0;i<response.length(); i++) {
+        if(escrito_numero) {
+            tituloFrigorifico += response.charAt(i);
+        } else {
+            if(response.charAt(i) == '|') {
+                escrito_numero = true;
+            } else {
+                idFrigorifico += response.charAt(i);
+            }
+        }
+    }
 
+    return tituloFrigorifico;
+  }
+}
+
+void entrarProducto(boolean esCodigoBarras) {
+  File dataFile = FileSystem.open("/mnt/sda1/data/log.txt", FILE_APPEND);
+  dataFile.println("Entrar producto");
+
+  String requestUrl = urlRest + entrarProductoRest + token + "/" + idFrigorifico + "/";
+  if(esCodigoBarras) {
+    requestUrl = requestUrl + arrayCodigoBarras;
+  } else {
+    requestUrl = requestUrl + arrayTag;
+  }
+
+  TFTscreen.rect(5, 70, 150, 25);
+  TFTscreen.text("Introduciendo producto", 10, 80);
+
+  dataFile.println(requestUrl);
+
+  client.get(requestUrl);
+
+  String response = "";
+  char charIn;
+  while (client.available()) {
+    charIn = client.read();
+    response += charIn;
+  }
+
+  dataFile.println(response);
+  dataFile.close();
+
+  TFTscreen.rect(5, 70, 150, 25);
+  if(response == "" || response == "ERROR") {
+    TFTscreen.text("Error al introducir el prod.", 10, 80);
+  } else {
+    TFTscreen.text("Produco introducido", 10, 80);
   }
 }
 
 void sacarProducto(boolean esCodigoBarras) {
   String requestUrl = urlRest + sacarProductoRest + token + "/" + idFrigorifico + "/";
   if(esCodigoBarras) {
-    requestUrl += arrayCodigoBarras;
+    requestUrl = requestUrl + arrayCodigoBarras + "/codigo_barras";
   } else {
-    requestUrl += arrayTag;
+    requestUrl = requestUrl + arrayTag + "/codigo_rfid";
   }
+
+  TFTscreen.rect(5, 70, 150, 25);
+  TFTscreen.text("Sacando producto", 10, 80);
+
+  client.get(requestUrl);
 
   String response = "";
   char charIn;
@@ -263,10 +329,11 @@ void sacarProducto(boolean esCodigoBarras) {
     response += charIn;
   }
 
+  TFTscreen.rect(5, 70, 150, 25);
   if(response == "" || response == "ERROR") {
-
+    TFTscreen.text("Error al sacar el prod.", 10, 80);
   } else {
-
+    TFTscreen.text("Producto sacado", 10, 80);
   }
 }
 
@@ -298,7 +365,8 @@ boolean leerYProcesarCodigoBarras() {
   if(millis() - timerCheckBarCode > 500) {
     timerCheckBarCode = millis();
 
-    int caracteresLeidos = Bridge.get("codebar", arrayCodigoBarras, 13);
+    int caracteresLeidos = Bridge.get("codebar", arrayCodigoBarras, 12);
+    arrayCodigoBarras[12] = '\0';
 
     if(caracteresLeidos != 0) {
       Bridge.put("codebar","");
@@ -306,6 +374,21 @@ boolean leerYProcesarCodigoBarras() {
     }
   }
   return false;
+}
+
+/*
+ * Funciones auxiliares
+*/
+
+void guardarFrigorifico() {
+    FileSystem.remove("/mnt/sda1/data/fridge.txt");
+    File dataFile = FileSystem.open("/mnt/sda1/data/fridge.txt", FILE_WRITE);
+    int i;
+    for(i=0; i<idFrigorifico.length(); i++) {
+      dataFile.write(idFrigorifico[i]);
+    }
+
+    dataFile.close();
 }
 
 /*
@@ -377,7 +460,7 @@ void printSacarProducto() {
   TFTscreen.text("Volver", 5, 37);
 }
 
-void printSeleccionarFrigo() {
+void printSiguienteFrigorifico() {
   stateApplication = 'S';
   TFTscreen.background(255,210,165);
 
@@ -387,6 +470,24 @@ void printSeleccionarFrigo() {
   TFTscreen.fill(204,204,204);
   TFTscreen.rect(0, 28, 60, 25);
   TFTscreen.text("Volver", 5, 37);
+
+  TFTscreen.rect(0, 103, 160, 25);
+  TFTscreen.text("SIGUIENTE FRIGORIFICO", 20, 112);
+
+  String frigorifico = seleccionSiguienteFrigorifico();
+
+  TFTscreen.rect(5, 70, 150, 25);
+  if(frigorifico != "") {
+    char arrayFrigo[21];
+
+    frigorifico.toCharArray(arrayFrigo, 21);
+    TFTscreen.text(arrayFrigo, 10, 80);
+    if(frigorifico.length() > 21) {
+        TFTscreen.text("...", 130, 80);
+    }
+  } else {
+    TFTscreen.text("Error, no tiene frigos", 10, 80);
+  }
 }
 
 void printDesvincular() {
@@ -403,30 +504,4 @@ void printDesvincular() {
 
   TFTscreen.rect(0, 103, 160, 25);
   TFTscreen.text("ACEPTAR", 47, 112);
-}
-
-/*
- * Logger
-*/
-
-void logger(String data) {
-  File dataFile = FileSystem.open("/mnt/sda1/data/log.txt", FILE_APPEND);
-  dataFile.println(data);
-  /*int i;
-  for(i = 0; i<data.length(); i++) {
-    dataFile.write(data[i]);
-  }
-  dataFile.write('\n');*/
-  dataFile.close();
-}
-
-void loggerArray(char texto[]) {
-  File dataFile = FileSystem.open("/mnt/sda1/data/log.txt", FILE_APPEND);
-  int i = 0;
-  while(texto[i] != '\0') {
-    dataFile.write(texto[i]);
-    i++;
-  }
-  dataFile.write('\n');
-  dataFile.close();
 }
