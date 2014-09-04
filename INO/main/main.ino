@@ -33,11 +33,6 @@ int buttonLeftState = 0;
 // Servidor
 HttpClient client;
 const String urlRest = "http://www.fribone.miguelgonzalezgomez.es/rest/";
-const String vincularLectorRest = "activar/";
-const String entrarProductoRest = "entrar/";
-const String sacarProductoRest = "sacar/";
-const String listarFrigorificosRest = "next_fridge/";
-const String desvincularRest = "desvincular/";
 
 //Variables de vinculación
 String token = "";
@@ -132,8 +127,8 @@ void loop() {
         }
         codigoBarrasUno[12] = '\0';
 
-          TFTscreen.rect(5, 70, 150, 25);
-          TFTscreen.text("Leido primer codigo", 10, 80);
+        TFTscreen.rect(5, 70, 150, 25);
+        TFTscreen.text("Leido codigo", 10, 80);
       } else {
         int i;
         for(i = 0; i<12; i++) {
@@ -175,6 +170,7 @@ boolean procesarEventosBotones() {
       printDesvincular();
     } else if(stateApplication == 'D') {
       FileSystem.remove("/mnt/sda1/data/token.txt");
+      FileSystem.remove("/mnt/sda1/data/fridge.txt");
 
       printVincular();
     } else if(stateApplication == 'S') {
@@ -205,7 +201,7 @@ boolean procesarEventosBotones() {
 */
 
 void iniciarVinculacion() {
-  String requestUrl = urlRest + vincularLectorRest + codigoBarrasUno + "/" + codigoBarrasDos;
+  String requestUrl = urlRest + "activar/" + codigoBarrasUno + "/" + codigoBarrasDos;
 
   TFTscreen.rect(5, 70, 150, 25);
   TFTscreen.text("Vinculando lector", 10, 80);
@@ -236,7 +232,7 @@ void iniciarVinculacion() {
 }
 
 String seleccionSiguienteFrigorifico() {
-  String requestUrl = urlRest + listarFrigorificosRest + token + '/' + idFrigorifico;
+  String requestUrl = urlRest + "next_fridge/" + token + '/' + idFrigorifico;
 
   TFTscreen.rect(5, 70, 150, 25);
   TFTscreen.text("Cargando frigo...", 10, 80);
@@ -274,10 +270,10 @@ String seleccionSiguienteFrigorifico() {
 }
 
 void entrarProducto(boolean esCodigoBarras) {
-  File dataFile = FileSystem.open("/mnt/sda1/data/log.txt", FILE_APPEND);
-  dataFile.println("Entrar producto");
+  //File dataFile = FileSystem.open("/mnt/sda1/data/log.txt", FILE_APPEND);
+  //dataFile.println("Entrar producto");
 
-  String requestUrl = urlRest + entrarProductoRest + token + "/" + idFrigorifico + "/";
+  String requestUrl = urlRest + "entrar/" + token + "/" + idFrigorifico + "/";
   if(esCodigoBarras) {
     requestUrl = requestUrl + arrayCodigoBarras;
   } else {
@@ -285,9 +281,9 @@ void entrarProducto(boolean esCodigoBarras) {
   }
 
   TFTscreen.rect(5, 70, 150, 25);
-  TFTscreen.text("Introduciendo producto", 10, 80);
+  TFTscreen.text("Introduciendo", 10, 80);
 
-  dataFile.println(requestUrl);
+  //dataFile.println(requestUrl);
 
   client.get(requestUrl);
 
@@ -298,19 +294,19 @@ void entrarProducto(boolean esCodigoBarras) {
     response += charIn;
   }
 
-  dataFile.println(response);
-  dataFile.close();
+  //dataFile.println(response);
+  //dataFile.close();
 
   TFTscreen.rect(5, 70, 150, 25);
   if(response == "" || response == "ERROR") {
-    TFTscreen.text("Error al introducir el prod.", 10, 80);
+    printError();
   } else {
-    TFTscreen.text("Produco introducido", 10, 80);
+    TFTscreen.text("Prod introducido", 10, 80);
   }
 }
 
 void sacarProducto(boolean esCodigoBarras) {
-  String requestUrl = urlRest + sacarProductoRest + token + "/" + idFrigorifico + "/";
+  String requestUrl = urlRest + "sacar/" + token + "/" + idFrigorifico + "/";
   if(esCodigoBarras) {
     requestUrl = requestUrl + arrayCodigoBarras + "/codigo_barras";
   } else {
@@ -318,7 +314,7 @@ void sacarProducto(boolean esCodigoBarras) {
   }
 
   TFTscreen.rect(5, 70, 150, 25);
-  TFTscreen.text("Sacando producto", 10, 80);
+  TFTscreen.text("Sacando", 10, 80);
 
   client.get(requestUrl);
 
@@ -331,9 +327,9 @@ void sacarProducto(boolean esCodigoBarras) {
 
   TFTscreen.rect(5, 70, 150, 25);
   if(response == "" || response == "ERROR") {
-    TFTscreen.text("Error al sacar el prod.", 10, 80);
+    printError();
   } else {
-    TFTscreen.text("Producto sacado", 10, 80);
+    TFTscreen.text("Prod sacado", 10, 80);
   }
 }
 
@@ -433,6 +429,10 @@ void printErrorVincular() {
   TFTscreen.text("ERROR", 28, 40);
   TFTscreen.text("Vuelva a intentarlo", 28, 60);
   leidoPrimerCodigoBarras = false;
+}
+
+void printError() {
+    TFTscreen.text("   ERROR", 10, 80);
 }
 
 
