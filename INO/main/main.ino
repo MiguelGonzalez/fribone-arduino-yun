@@ -20,10 +20,10 @@ TFT TFTscreen = TFT(lcd_cs, dc, rst);
 SoftwareSerial RFID = SoftwareSerial(rxPin, txPin); // RX and TX
 
 // Botones
-const int buttonUp = 13;
-const int buttonRight = 7;
-const int buttonDown = 6;
-const int buttonLeft = 5;
+#define buttonUp 13
+#define buttonRight 7
+#define buttonDown 6
+#define buttonLeft 5
 
 int buttonUpState = 0;
 int buttonRightState = 0;
@@ -207,6 +207,7 @@ void iniciarVinculacion() {
   TFTscreen.text("Vinculando lector", 10, 80);
 
   client.get(requestUrl);
+  requestUrl = "";
 
   String response = "";
   char charIn;
@@ -217,8 +218,10 @@ void iniciarVinculacion() {
 
   if(response == "" || response == "ERROR") {
     printErrorVincular();
+    response = "";
   } else {
     token = response;
+    response = "";
 
     File dataFile = FileSystem.open("/mnt/sda1/data/token.txt", FILE_WRITE);
     int i;
@@ -238,6 +241,7 @@ String seleccionSiguienteFrigorifico() {
   TFTscreen.text("Cargando frigo...", 10, 80);
 
   client.get(requestUrl);
+  requestUrl = "";
 
   String response = "";
   char charIn;
@@ -247,6 +251,7 @@ String seleccionSiguienteFrigorifico() {
   }
 
   if(response == "" || response == "ERROR") {
+    response = "";
     return "";
   } else {
     idFrigorifico = "";
@@ -264,6 +269,7 @@ String seleccionSiguienteFrigorifico() {
             }
         }
     }
+    response = "";
 
     return tituloFrigorifico;
   }
@@ -286,6 +292,7 @@ void entrarProducto(boolean esCodigoBarras) {
   //dataFile.println(requestUrl);
 
   client.get(requestUrl);
+  requestUrl = "";
 
   String response = "";
   char charIn;
@@ -300,8 +307,10 @@ void entrarProducto(boolean esCodigoBarras) {
   TFTscreen.rect(5, 70, 150, 25);
   if(response == "" || response == "ERROR") {
     printError();
+    response = "";
   } else {
     TFTscreen.text("Prod introducido", 10, 80);
+    response = "";
   }
 }
 
@@ -317,6 +326,7 @@ void sacarProducto(boolean esCodigoBarras) {
   TFTscreen.text("Sacando", 10, 80);
 
   client.get(requestUrl);
+  requestUrl = "";
 
   String response = "";
   char charIn;
@@ -328,8 +338,10 @@ void sacarProducto(boolean esCodigoBarras) {
   TFTscreen.rect(5, 70, 150, 25);
   if(response == "" || response == "ERROR") {
     printError();
+    response = "";
   } else {
     TFTscreen.text("Prod sacado", 10, 80);
+    response = "";
   }
 }
 
